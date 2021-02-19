@@ -6,7 +6,7 @@ import os
 import re
 import subprocess
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 __usage__ = '''
 dovecot-archive is a doveadm wrapper for common mail archival tasks.
 
