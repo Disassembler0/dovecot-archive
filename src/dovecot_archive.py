@@ -347,7 +347,7 @@ def parse_args(arguments):
     parser.add_argument('--verbose', '-v', action='count', default=0,
                         help='Print informational (-v) and debug (-vv) messages. If not given, ' \
                              'the tool is silent and outputs only fatal errors.')
-    parser.add_argument('--path-delimiter', '-p', action='append', default='.',
+    parser.add_argument('--path-delimiter', '-p', default=os.path.sep,
                         help='Delimiter character used to separate mailbox path components')
 
     args = parser.parse_args(arguments)
