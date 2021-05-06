@@ -347,6 +347,8 @@ def parse_args(arguments):
     parser.add_argument('--verbose', '-v', action='count', default=0,
                         help='Print informational (-v) and debug (-vv) messages. If not given, ' \
                              'the tool is silent and outputs only fatal errors.')
+    parser.add_argument('--path-delimiter', '-p', action='append', default='.',
+                        help='Delimiter character used to separate mailbox path components')
 
     args = parser.parse_args(arguments)
 
@@ -389,6 +391,8 @@ def main(command_args=None):
     for folder in args.folder:
         folders.extend(get_subfolders(args.user, folder))
 
+    delim = args.path_delimiter
+
     # Process the folders
     if args.split_by_year:
         # Iterate over years in case the user wants to split by years
@@ -398,13 +402,19 @@ def main(command_args=None):
             since = f'{year}-01-01'
             for folder in folders:
                 if args.year_as_last_folder:
-                    dst_folder = os.path.join(args.dst_root_folder, folder, str(year))
+                    #dst_folder = os.path.join(args.dst_root_folder, folder, str(year))
+                    dst_folder = delim.join([args.dst_root_folder, folder, str(year)])
                 else:
-                    dst_folder = os.path.join(args.dst_root_folder, str(year), folder)
+                    #dst_folder = os.path.join(args.dst_root_folder, str(year), folder)
+                    dst_folder = delim.join([args.dst_root_folder, str(year), folder])
+
+                dst_folder = dst_folder.lstrip(delim)
                 process_folder(args.user, folder, args.dst_user, dst_folder,
                                since, before, args.copy)
             before = since
     else:
         for folder in folders:
-            dst_folder = os.path.join(args.dst_root_folder, folder)
+            #dst_folder = os.path.join(args.dst_root_folder, folder)
+            dst_folder = delim.join([args.dst_root_folder, folder])
+            dst_folder = dst_folder.lstrip(delim)
             process_folder(args.user, folder, args.dst_user, dst_folder, None, before, args.copy)
