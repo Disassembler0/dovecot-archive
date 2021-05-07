@@ -74,6 +74,14 @@ def test_parse_datetime_exception(value):
         dovecot_archive.parse_datetime(value)
 
 
+def test_mailbox_path_join():
+    path1 = dovecot_archive.mailbox_path_join('INBOX', 'folder')
+    path2 = dovecot_archive.mailbox_path_join('INBOX', 'folder', 'subfolder', separator='.')
+
+    assert path1 == 'INBOX/folder'
+    assert path2 == 'INBOX.folder.subfolder'
+
+
 @mock.patch('subprocess.run')
 def test_run(run):
     dovecot_archive.run(['ls', '-la'], param='test')
@@ -263,6 +271,7 @@ def test_parse_args():
                                         folder=[''],
                                         split_by_year=False,
                                         year_as_last_folder=False,
+                                        namespace_separator='/',
                                         verbose=0)
 
 def test_parse_args_none():
@@ -278,6 +287,7 @@ def test_parse_args_all():
                                          '--split-by-year',
                                          '--year-as-last-folder',
                                          '--copy',
+                                         '--namespace-separator', '.',
                                          '--verbose'])
 
     assert result == argparse.Namespace(before='3 months',
@@ -288,6 +298,7 @@ def test_parse_args_all():
                                         folder=['srcfolder'],
                                         split_by_year=True,
                                         year_as_last_folder=True,
+                                        namespace_separator='.',
                                         verbose=1)
 
 

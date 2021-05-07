@@ -34,6 +34,9 @@ optional arguments:
 ``--copy, -c``
     Copy the mails instead of moving. If not given the mails are removed from the source location after successful move.
 
+``--namespace-separator, -s``
+    Delimiter character used to separate Dovecot mailbox path components (i.e. not a filesystem directory separator).
+
 ``--verbose, -v``
     Print informational (-v) and debug (-vv) messages. If not given, the tool is silent and outputs only fatal errors.
 
@@ -72,3 +75,16 @@ Manually run once:
 .. code-block:: bash
 
     dovecot-archive --user leaver@example.com --dst-user joiner@example.com --dst-root-folder "Jane Doe"
+
+Changelog
+---------
+
+*1.1.0*
+^^^^^^^
+
+- Added ``--namespace-separator`` parameter used to separate Dovecot mailbox path components.
+
+*1.0.1*
+^^^^^^^
+
+- Initial release.

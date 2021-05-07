@@ -2,11 +2,10 @@ import argparse
 import datetime
 import dateutil.relativedelta
 import logging
-import os
 import re
 import subprocess
 
-__version__ = '1.0.1'
+__version__ = '1.1.0'
 __usage__ = '''
 dovecot-archive is a doveadm wrapper for common mail archival tasks.
 
@@ -305,6 +304,25 @@ def parse_datetime(value):
     return (str(int(dt.timestamp())), dt.year)
 
 
+def mailbox_path_join(*args, separator='/'):
+    '''
+    Concatenates Dovecot mailbox path components using appropriate hierarchy separator.
+    See https://doc.dovecot.org/configuration_manual/namespace/#hierarchy-separators
+
+    :param args: Strings containing the components of a mailbox path.
+    :type args: tuple
+
+    :param separator: A character used to join the individual path components.
+                      The default separator is forward slash (not os.path.sep), but some
+                      configurations may use dot instead.
+    :type separator: str
+
+    :return: Concatenated mailbox path.
+    :rtype: str
+    '''
+    return separator.join(args).lstrip(separator)
+
+
 def parse_args(arguments):
     '''
     Parses user supplied arguments from command line.
@@ -344,6 +362,9 @@ def parse_args(arguments):
     parser.add_argument('--copy', '-c', action='store_true',
                         help='Copy the mails instead of moving. If not given the mails are ' \
                              'removed from the source location after successful move.')
+    parser.add_argument('--namespace-separator', '-s', default='/',
+                        help='Delimiter character used to separate Dovecot mailbox path ' \
+                             'components (i.e. not a filesystem directory separator).')
     parser.add_argument('--verbose', '-v', action='count', default=0,
                         help='Print informational (-v) and debug (-vv) messages. If not given, ' \
                              'the tool is silent and outputs only fatal errors.')
@@ -398,13 +419,16 @@ def main(command_args=None):
             since = f'{year}-01-01'
             for folder in folders:
                 if args.year_as_last_folder:
-                    dst_folder = os.path.join(args.dst_root_folder, folder, str(year))
+                    dst_folder_components = (args.dst_root_folder, folder, str(year))
                 else:
-                    dst_folder = os.path.join(args.dst_root_folder, str(year), folder)
+                    dst_folder_components = (args.dst_root_folder, str(year), folder)
+                dst_folder = mailbox_path_join(*dst_folder_components,
+                                               separator=args.namespace_separator)
                 process_folder(args.user, folder, args.dst_user, dst_folder,
                                since, before, args.copy)
             before = since
     else:
         for folder in folders:
-            dst_folder = os.path.join(args.dst_root_folder, folder)
+            dst_folder = mailbox_path_join(args.dst_root_folder, folder,
+                                           separator=args.namespace_separator)
             process_folder(args.user, folder, args.dst_user, dst_folder, None, before, args.copy)
