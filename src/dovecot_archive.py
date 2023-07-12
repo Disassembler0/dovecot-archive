@@ -140,7 +140,7 @@ def create_folder(user, folder):
     :return: Nothing.
     :rtype: None
     '''
-    logger.info('Creating folder %s and subscribing user %s to is', folder, user)
+    logger.info('Creating folder %s and subscribing user %s to it', folder, user)
     run(['doveadm', 'mailbox', 'create', '-u', user, folder])
     run(['doveadm', 'mailbox', 'subscribe', '-u', user, folder])
 
