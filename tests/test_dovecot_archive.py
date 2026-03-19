@@ -1,10 +1,11 @@
 import argparse
 import datetime
 import logging
-import mock
 import os
 import pytest
 import subprocess
+import unittest.mock as mock
+
 import dovecot_archive
 
 
@@ -23,39 +24,40 @@ def mock_datetime_now(target, dt):
             return target.replace(tzinfo=tz)
 
         @classmethod
-        def utcnow(cls):
-            return target # pragma: no cover
+        def fromtimestamp(cls, timestamp, tz=None):
+            dt = real_datetime_class.fromtimestamp(timestamp, tz=datetime.timezone.utc)
+            return dt.replace(tzinfo=tz)
 
     MockedDatetime = DatetimeSubclassMeta('datetime', (BaseMockedDatetime,), {})
     return mock.patch.object(dt, 'datetime', MockedDatetime)
 
 
 @pytest.mark.parametrize('value,expected', [
-    (None, (None, 2021)),
-    ('', (None, 2021)),
-    ('2019-05-10', ('2019-05-10', 2019)),
-    ('31-Dec-2020', ('31-Dec-2020', 2020)),
-    ('1613665392', ('1613665392', 2021)),
-    ('3 years', ('2018-02-18', 2018)),
-    ('3yrs', ('2018-02-18', 2018)),
-    ('3y', ('2018-02-18', 2018)),
-    ('6 months', ('2020-08-18', 2020)),
-    ('6 mon', ('2020-08-18', 2020)),
-    ('6mo', ('2020-08-18', 2020)),
-    ('12 weeks', ('2020-11-26', 2020)),
-    ('12wks', ('2020-11-26', 2020)),
-    ('12 w', ('2020-11-26', 2020)),
-    ('14 days', ('2021-02-04', 2021)),
-    ('14d', ('2021-02-04', 2021)),
-    ('2 hours', ('1613595600', 2021)),
-    ('2hrs', ('1613595600', 2021)),
-    ('2h', ('1613595600', 2021)),
-    ('5 minutes', ('1613602500', 2021)),
-    ('5m', ('1613602500', 2021)),
-    ('5 mins', ('1613602500', 2021)),
-    ('30 seconds', ('1613602770', 2021)),
-    ('30 s', ('1613602770', 2021)),
-    ('30secs', ('1613602770', 2021)),
+    (None, (None, None)),
+    ('', (None, None)),
+    ('2019-05-10', ('2019-05-10', datetime.datetime(2019, 5, 10))),
+    ('31-Dec-2020', ('31-Dec-2020', datetime.datetime(2020, 12, 31))),
+    ('1613665392', ('1613665392', datetime.datetime(2021, 2, 18, 16, 23, 12))),
+    ('3 years', ('2018-02-18', datetime.datetime(2018, 2, 18))),
+    ('3yrs', ('2018-02-18', datetime.datetime(2018, 2, 18))),
+    ('3y', ('2018-02-18', datetime.datetime(2018, 2, 18))),
+    ('6 months', ('2020-08-18', datetime.datetime(2020, 8, 18))),
+    ('6 mon', ('2020-08-18', datetime.datetime(2020, 8, 18))),
+    ('6mo', ('2020-08-18', datetime.datetime(2020, 8, 18))),
+    ('12 weeks', ('2020-11-26', datetime.datetime(2020, 11, 26))),
+    ('12wks', ('2020-11-26', datetime.datetime(2020, 11, 26))),
+    ('12 w', ('2020-11-26', datetime.datetime(2020, 11, 26))),
+    ('14 days', ('2021-02-04', datetime.datetime(2021, 2, 4))),
+    ('14d', ('2021-02-04', datetime.datetime(2021, 2, 4))),
+    ('2 hours', ('1613595600', datetime.datetime(2021, 2, 17, 22, 0))),
+    ('2hrs', ('1613595600', datetime.datetime(2021, 2, 17, 22, 0))),
+    ('2h', ('1613595600', datetime.datetime(2021, 2, 17, 22, 0))),
+    ('5 minutes', ('1613602500', datetime.datetime(2021, 2, 17, 23, 55))),
+    ('5m', ('1613602500', datetime.datetime(2021, 2, 17, 23, 55))),
+    ('5 mins', ('1613602500', datetime.datetime(2021, 2, 17, 23, 55))),
+    ('30 seconds', ('1613602770', datetime.datetime(2021, 2, 17, 23, 59, 30))),
+    ('30 s', ('1613602770', datetime.datetime(2021, 2, 17, 23, 59, 30))),
+    ('30secs', ('1613602770', datetime.datetime(2021, 2, 17, 23, 59, 30))),
 ])
 def test_parse_datetime(value, expected):
     with mock_datetime_now(datetime.datetime(2021, 2, 18), datetime):
@@ -269,6 +271,7 @@ def test_parse_args():
                                         dst_root_folder='',
                                         dst_user='user@example.com',
                                         folder=[''],
+                                        since=None,
                                         split_by_year=False,
                                         year_as_last_folder=False,
                                         namespace_separator='/',
@@ -284,6 +287,7 @@ def test_parse_args_all():
                                          '--dst-user', 'dstuser@example.com',
                                          '--dst-root-folder', 'dstfolder',
                                          '--before', '3 months',
+                                         '--since', '2020-05-20',
                                          '--split-by-year',
                                          '--year-as-last-folder',
                                          '--copy',
@@ -296,6 +300,7 @@ def test_parse_args_all():
                                         dst_root_folder='dstfolder',
                                         dst_user='dstuser@example.com',
                                         folder=['srcfolder'],
+                                        since='2020-05-20',
                                         split_by_year=True,
                                         year_as_last_folder=True,
                                         namespace_separator='.',
@@ -340,14 +345,14 @@ def test_main2(process_folder, get_subfolders, logging_config):
         mock.call('user@example.com', 'Sent', 'user@example.com',
                   os.path.join('Archive', '2001', 'Sent'), '2001-01-01', '2002-01-01', False),
         mock.call('user@example.com', 'INBOX', 'user@example.com',
-                  os.path.join('Archive', '2000', 'INBOX'), '2000-01-01', '2001-01-01', False),
+                  os.path.join('Archive', '2000', 'INBOX'), None, '2001-01-01', False),
         mock.call('user@example.com', 'Sent', 'user@example.com',
-                  os.path.join('Archive', '2000', 'Sent'), '2000-01-01', '2001-01-01', False),
+                  os.path.join('Archive', '2000', 'Sent'), None, '2001-01-01', False),
     ])
 
 
-# --user user@example.com --folder INBOX --dst-user dstuser@example.com --before '31-Oct-1995'
-# --split-by-year --year-as-last-folder -vv
+# --user user@example.com --folder INBOX --dst-user dstuser@example.com --before 1130785200
+# --since 15-Nov-2003 --split-by-year --year-as-last-folder -vv
 @mock.patch('logging.basicConfig')
 @mock.patch('dovecot_archive.get_subfolders', return_value=['INBOX', 'INBOX/Work'])
 @mock.patch('dovecot_archive.process_folder')
@@ -355,7 +360,8 @@ def test_main3(process_folder, get_subfolders, logging_config):
     dovecot_archive.main(['--user', 'user@example.com',
                           '--folder', 'INBOX',
                           '--dst-user', 'dstuser@example.com',
-                          '--before', '31-Oct-1995',
+                          '--before', '1130785200',
+                          '--since', '15-Nov-2003',
                           '--split-by-year',
                           '--year-as-last-folder',
                           '-vv'])
@@ -364,7 +370,15 @@ def test_main3(process_folder, get_subfolders, logging_config):
     get_subfolders.assert_called_once_with('user@example.com', 'INBOX')
     process_folder.assert_has_calls([
         mock.call('user@example.com', 'INBOX', 'dstuser@example.com',
-                  os.path.join('INBOX', '1995'), '1995-01-01', '31-Oct-1995', False),
+                  os.path.join('INBOX', '2005'), '2005-01-01', '1130785200', False),
         mock.call('user@example.com', 'INBOX/Work', 'dstuser@example.com',
-                  os.path.join('INBOX/Work', '1995'), '1995-01-01', '31-Oct-1995', False),
+                  os.path.join('INBOX/Work', '2005'), '2005-01-01', '1130785200', False),
+        mock.call('user@example.com', 'INBOX', 'dstuser@example.com',
+                  os.path.join('INBOX', '2004'), '2004-01-01', '2005-01-01', False),
+        mock.call('user@example.com', 'INBOX/Work', 'dstuser@example.com',
+                  os.path.join('INBOX/Work', '2004'), '2004-01-01', '2005-01-01', False),
+        mock.call('user@example.com', 'INBOX', 'dstuser@example.com',
+                  os.path.join('INBOX', '2003'), '15-Nov-2003', '2004-01-01', False),
+        mock.call('user@example.com', 'INBOX/Work', 'dstuser@example.com',
+                  os.path.join('INBOX/Work', '2003'), '15-Nov-2003', '2004-01-01', False),
     ])

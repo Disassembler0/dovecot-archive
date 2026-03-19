@@ -5,7 +5,7 @@ import logging
 import re
 import subprocess
 
-__version__ = '1.1.0'
+__version__ = '1.2.0'
 __usage__ = '''
 dovecot-archive is a doveadm wrapper for common mail archival tasks.
 
@@ -26,13 +26,14 @@ Scenario 2) I have way too many mails and I want to move mails older than 14 day
     dovecot-archive --user user@example.com --folder INBOX --dst-root-folder Archive \\
                     --split-by-year --before "14 days"
 
-Scenario 3) An employee is leaving the company and I want to move all their mail to a new
-            user/account of the employee replacing them. I want to move the whole folder
+Scenario 3) An employee is leaving the company and I want to move all their mail from 2020 onward
+            to a new user/account of the employee replacing them. I want to move the whole folder
             structure, but to place it under a subfolder so it doesn't interfere with the new
-            empolyee's mails.
+            employee's mails.
 
     Manually run once:
-    dovecot-archive --user leaver@example.com --dst-user joiner@example.com --dst-root-folder "Jane Doe"
+    dovecot-archive --user leaver@example.com --dst-user joiner@example.com \\
+                    --dst-root-folder "Jane Doe" --since 2020-01-01
 '''
 
 logger = logging.getLogger('dovecot-archive')
@@ -244,7 +245,7 @@ def process_folder(user, folder, dst_user, dst_folder, since, before, copy):
 
 def parse_datetime(value):
     '''
-    Parses represenation of a date/time given by the user, attempts to match one of the accepted
+    Parses representation of a date/time given by the user, attempts to match one of the accepted
     formats and transforms it into a value which is usable further in the script.
 
     :param value: Representation of a date/time. Can be one of `None`, unix timestamp,
@@ -255,36 +256,35 @@ def parse_datetime(value):
     :raises: ValueError: ValueError is raised when the method fails to match the representation
                          against one of the expected formats.
 
-    :return: Tuple of (string, int) containing date/time string usable further in the script
-             and the most recent year to process, which will be used in case the user wants
-             to split the folders by year.
+    :return: Tuple of (string, datetime) containing date/time string usable further in the script
+             and a datetime object, which will be used in case the user wants to split the folders
+             by year.
     :rtype: tuple
     '''
-    # Empty value means "now"
     if not value:
-        return (None, datetime.datetime.now().year)
+        return (None, None)
 
-    # All digits means unix timestamp (e.g. 1609372800), but check if it's later than 1990
+    # All digits means unix timestamp (e.g. 1609372800), but check if it's later than 2000
     # to prevent unexpected runs when the user forgets to quote human readable representation
     try:
         timestamp = int(value)
         dt = datetime.datetime.fromtimestamp(timestamp)
-        if dt > datetime.datetime(1990, 1, 1):
-            return (value, dt.year)
+        if dt > datetime.datetime(2000, 1, 1):
+            return (value, dt)
     except ValueError:
         pass
 
     # ISO-8601 date format YYYY-MM-DD (e.g. '2020-12-31')
     try:
         dt = datetime.datetime.strptime(value, '%Y-%m-%d')
-        return (value, dt.year)
+        return (value, dt)
     except ValueError:
         pass
 
     # IMAP4rev1 date format DD-Mon-YYYY (e.g. '31-Dec-2020')
     try:
         dt = datetime.datetime.strptime(value, '%d-%b-%Y')
-        return (value, dt.year)
+        return (value, dt)
     except ValueError:
         pass
 
@@ -294,14 +294,14 @@ def parse_datetime(value):
                      d(?:ays?)?|w(?:(?:ee)?ks?)?|mo(?:n(?:th)?s?)?|y(?:(?:ea)?rs?)?)$
                      ''', value, re.VERBOSE)
     if not match:
-        raise ValueError(f'Unable to parse time representation "{value}"')
+        raise ValueError(f'Unable to parse datetime representation "{value}"')
     units = {'s': 'seconds', 'm': 'minutes', 'h': 'hours', 'd': 'days', 'w': 'weeks', 'y': 'years'}
     unit = 'months' if match[2].startswith('mo') else units[match[2][0]]
     kwargs = {unit: int(match[1])}
     dt = datetime.datetime.now() - dateutil.relativedelta.relativedelta(**kwargs)
     if unit in ('days', 'weeks', 'months', 'years'):
-        return (dt.strftime('%Y-%m-%d'), dt.year)
-    return (str(int(dt.timestamp())), dt.year)
+        return (dt.strftime('%Y-%m-%d'), dt)
+    return (str(int(dt.timestamp())), dt)
 
 
 def mailbox_path_join(*args, separator='/'):
@@ -349,6 +349,11 @@ def parse_args(arguments):
                              'as unix timestamp, ISO-8601 (YYY-MM-DD), IMAP4rev1 (DD-Mon-YYYY) ' \
                              'or a human readable representation of elapsed time (e.g. ' \
                              '"2 months", "3y"). If not given, all mails will be moved.')
+    parser.add_argument('--since', '--after', '-a',
+                        help='Move only mails sent after this date. The date needs to supplied ' \
+                             'as unix timestamp, ISO-8601 (YYY-MM-DD), IMAP4rev1 (DD-Mon-YYYY) ' \
+                             'or a human readable representation of elapsed time (e.g. ' \
+                             '"2 months", "3y"). If not given, all mails will be moved.')
     parser.add_argument('--split-by-year', '-y', action='store_true',
                         help='Create subfolders with the respective years in the destination ' \
                              'folder structure as ' \
@@ -356,7 +361,7 @@ def parse_args(arguments):
                              'If not given, folders will be moved as a whole.')
     parser.add_argument('--year-as-last-folder', '-l', action='store_true',
                         help='Create subfolders with the respective years as the last ' \
-                             'folder in the hieararchy as ' \
+                             'folder in the hierarchy as ' \
                              '[/dst-root-folder]/<folder>/<subfolder>/<year>. ' \
                              'Effective only when --split-by-year is used.')
     parser.add_argument('--copy', '-c', action='store_true',
@@ -402,8 +407,8 @@ def main(command_args=None):
         logging.basicConfig(level=logging.DEBUG)
 
     # Parse datetime representation
-    # Also gets the latest year to process in case the user wants to split by years
-    before, first_year = parse_datetime(args.before)
+    str_before, before = parse_datetime(args.before)
+    str_since, since = parse_datetime(args.since)
 
     # Get full list of all folders and subfolders to process
     folders = []
@@ -412,11 +417,21 @@ def main(command_args=None):
 
     # Process the folders
     if args.split_by_year:
-        # Iterate over years in case the user wants to split by years
-        # The first processed year (most recent) is always clamped by the 'before' argument
-        # Previous years are processed in full
-        for year in range(first_year, min(first_year, 2000)-1, -1):
-            since = f'{year}-01-01'
+        # In case the user wants to split by years, iterate from the most recent year,
+        # so cron jobs deal with the newest mails first
+        # The first processed year (most recent) is always limited by the 'before' argument
+        # The last processed year (least recent) is always limited by the 'since' argument
+        # Years in between are processed in full
+        before = before or datetime.datetime.now()
+        since = since or datetime.datetime(2000, 1, 1)
+        for year in range(before.year, since.year - 1, -1):
+            year_since = (
+                str_since if year == since.year else str(datetime.datetime(year, 1, 1).date())
+            )
+            year_before = (
+                str_before if year == before.year
+                else str(datetime.datetime(year + 1, 1, 1).date())
+            )
             for folder in folders:
                 if args.year_as_last_folder:
                     dst_folder_components = (args.dst_root_folder, folder, str(year))
@@ -425,10 +440,10 @@ def main(command_args=None):
                 dst_folder = mailbox_path_join(*dst_folder_components,
                                                separator=args.namespace_separator)
                 process_folder(args.user, folder, args.dst_user, dst_folder,
-                               since, before, args.copy)
-            before = since
+                               year_since, year_before, args.copy)
     else:
         for folder in folders:
             dst_folder = mailbox_path_join(args.dst_root_folder, folder,
                                            separator=args.namespace_separator)
-            process_folder(args.user, folder, args.dst_user, dst_folder, None, before, args.copy)
+            process_folder(args.user, folder, args.dst_user, dst_folder, str_since, str_before,
+                           args.copy)

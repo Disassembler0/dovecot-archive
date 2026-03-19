@@ -25,11 +25,14 @@ optional arguments:
 ``--before BEFORE, -b BEFORE``
     Move only mails sent before this date. The date needs to supplied as unix timestamp, ISO-8601 (YYY-MM-DD), IMAP4rev1 (DD-Mon-YYYY) or a human readable representation of elapsed time (e.g. "2 months", "3y"). If not given, all mails will be moved.
 
+``--since SINCE, --after SINCE, -a SINCE``
+    Move only mails sent after this date. The date needs to supplied as unix timestamp, ISO-8601 (YYY-MM-DD), IMAP4rev1 (DD-Mon-YYYY) or a human readable representation of elapsed time (e.g. "2 months", "3y"). If not given, all mails will be moved.
+
 ``--split-by-year, -y``
     Create subfolders with the respective years in the destination folder structure as [/dst-root-folder]/<year>/<folder>/<subfolder>. If not given, folders will be moved as a whole.
 
 ``--year-as-last-folder, -l``
-    Create subfolders with the respective years as the last folder in the hieararchy as [/dst-root-folder]/<folder>/<subfolder>/<year>. Effective only when --split-by-year is used.
+    Create subfolders with the respective years as the last folder in the hierarchy as [/dst-root-folder]/<folder>/<subfolder>/<year>. Effective only when --split-by-year is used.
 
 ``--copy, -c``
     Copy the mails instead of moving. If not given the mails are removed from the source location after successful move.
@@ -68,16 +71,22 @@ Create a daily cron task:
 Scenario 3)
 ^^^^^^^^^^^
 
-An employee is leaving the company and I want to move all their mail to a new user/account of the employee replacing them. I want to move the whole folder structure, but to place it under a subfolder so it doesn't interfere with the new empolyee's mails.
+An employee is leaving the company and I want to move all their mail from 2020 onward to a new user/account of the employee replacing them. I want to move the whole folder structure, but to place it under a subfolder so it doesn't interfere with the new employee's mails.
 
 Manually run once:
 
 .. code-block:: bash
 
-    dovecot-archive --user leaver@example.com --dst-user joiner@example.com --dst-root-folder "Jane Doe"
+    dovecot-archive --user leaver@example.com --dst-user joiner@example.com --dst-root-folder "Jane Doe" --since 2020-01-01
 
 Changelog
 ---------
+
+*1.2.0*
+^^^^^^^
+
+- Added ``--since`` parameter.
+- Updated datetime handling.
 
 *1.1.0*
 ^^^^^^^
